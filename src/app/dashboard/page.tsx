@@ -7,161 +7,111 @@ import {
 } from "react";
 
 import { useSession } from "next-auth/react";
-
 import { useRouter } from "next/navigation";
 
 import ConfigEditor from "@/components/editor/ConfigEditor";
-
 import DynamicDashboard from "@/components/DynamicDashboard";
-
 import ValidationPanel from "@/components/editor/ValidationPanel";
-
 import CSVImporter from "@/components/csv/CSVImporter";
 
 import SaveConfigButton from "@/components/actions/SaveConfigButton";
-
 import ExportConfigButton from "@/components/actions/ExportConfigButton";
-
 import ImportConfigButton from "@/components/actions/ImportConfigButton";
-
 import SavedConfigs from "@/components/actions/SavedConfigs";
-
 import HistoryControls from "@/components/actions/HistoryControls";
 
 import ComponentPalette from "@/components/builder/ComponentPalette";
-
 import BuilderCanvas from "@/components/builder/BuilderCanvas";
-
 import PropertyEditor from "@/components/builder/PropertyEditor";
-
 import ComponentSearch from "@/components/builder/ComponentSearch";
-
 import StatsPanel from "@/components/builder/StatsPanel";
-
 import TemplateSelector from "@/components/builder/TemplateSelector";
 
 import ThemeSelector from "@/components/theme/ThemeSelector";
-
 import Loader from "@/components/ui/Loader";
 
 import { sampleConfig } from "@/lib/configs/sampleConfig";
-
 import { templates } from "@/lib/configs/templates";
-
 import { validateConfig } from "@/lib/validator/validateConfig";
-
 import { themeClasses } from "@/lib/themes/themeClasses";
 
 import useHistory from "@/hooks/useHistory";
-
 import useAutoSave from "@/hooks/useAutoSave";
-
 import useKeyboardShortcuts from "@/hooks/useKeyboardShortcuts";
 
 import { AppConfig } from "@/types/config";
 
 export default function DashboardPage() {
-
-  const {
-    data: session,
-    status,
-  } = useSession();
+  const { data: session, status } = useSession();
 
   const router = useRouter();
 
   useEffect(() => {
-    if (
-      status === "unauthenticated"
-    ) {
+    if (status === "unauthenticated") {
       router.push("/login");
     }
   }, [status, router]);
+
+  const userKey =
+    session?.user?.email || "guest";
+
+  const storageKey =
+    `configflow-autosave-${userKey}`;
+
+  const [configLoaded, setConfigLoaded] =
+    useState(false);
 
   const [initialConfig, setInitialConfig] =
     useState<AppConfig>(sampleConfig);
 
   useEffect(() => {
-
-    if (
-      typeof window === "undefined"
-    ) return;
+    if (!session?.user?.email) return;
 
     const saved =
-      localStorage.getItem(
-        `configflow-autosave-${session?.user?.email || "guest"}`
-      );
+      localStorage.getItem(storageKey);
 
     if (saved) {
-
       try {
-
-        setInitialConfig(
-          JSON.parse(saved)
-        );
-
+        setInitialConfig(JSON.parse(saved));
       } catch {
-
-        setInitialConfig(
-          sampleConfig
-        );
+        setInitialConfig(sampleConfig);
       }
-
     } else {
-
-      setInitialConfig(
-        sampleConfig
-      );
+      setInitialConfig(sampleConfig);
     }
 
-  }, [session]);
+    setConfigLoaded(true);
+  }, [storageKey, session]);
 
   const history =
-    useHistory<AppConfig>(
-      initialConfig
+    useHistory<AppConfig>(initialConfig);
+
+  const config = history.state;
+
+  useAutoSave(storageKey, config);
+
+  const [configText, setConfigText] =
+    useState(
+      JSON.stringify(
+        config,
+        null,
+        2
+      )
     );
-
-  useEffect(() => {
-    history.set(initialConfig);
-  }, [initialConfig]);
-
-  const config =
-    history.state;
-
-  useAutoSave(
-    `configflow-autosave-${session?.user?.email || "guest"}`,
-    config
-  );
-
-  const [
-    configText,
-    setConfigText,
-  ] = useState(
-    JSON.stringify(
-      config,
-      null,
-      2
-    )
-  );
 
   const [
     selectedComponent,
     setSelectedComponent,
   ] = useState<any>(null);
 
-  const [
-    theme,
-    setTheme,
-  ] = useState("dark");
+  const [theme, setTheme] =
+    useState("dark");
 
-  const [
-    search,
-    setSearch,
-  ] = useState("");
+  const [search, setSearch] =
+    useState("");
 
-  const [
-    error,
-    setError,
-  ] = useState("");
+  const [error, setError] =
+    useState("");
 
   const [
     validationErrors,
@@ -175,27 +125,20 @@ export default function DashboardPage() {
 
   const handleSaveShortcut =
     async () => {
-
       try {
+        await fetch("/api/configs", {
+          method: "POST",
 
-        await fetch(
-          "/api/configs",
-          {
-            method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              name: "Runtime Config",
-
-              content: config,
-            }),
-          }
-        );
-
+          body: JSON.stringify({
+            name: "Runtime Config",
+            content: config,
+          }),
+        });
       } catch {}
     };
 
@@ -206,7 +149,6 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
-
     setConfigText(
       JSON.stringify(
         config,
@@ -221,12 +163,10 @@ export default function DashboardPage() {
     setValidationErrors(
       validation.errors
     );
-
   }, [config]);
 
   const filteredConfig =
     useMemo(() => {
-
       if (!search.trim()) {
         return config;
       }
@@ -244,55 +184,52 @@ export default function DashboardPage() {
                 )
           ),
       };
-
     }, [config, search]);
 
   const updateConfig = (
     updatedConfig: AppConfig
   ) => {
-
     history.set(updatedConfig);
   };
 
   const handleTemplateSelect = (
     templateName: string
   ) => {
-
     const template =
       templates[
         templateName as keyof typeof templates
-      ] as AppConfig["components"];
+      ];
 
     if (!template) return;
 
     const updatedConfig: AppConfig = {
-      ...sampleConfig,
+      ...config,
 
-      components: template,
+      components: template.map(
+        (component: any) => ({
+          ...component,
+
+          id: crypto.randomUUID(),
+        })
+      ),
     };
 
     updateConfig(updatedConfig);
-
-    setSelectedComponent(null);
   };
 
   const handleConfigChange = (
     value: string
   ) => {
-
     setConfigText(value);
 
     try {
-
       const parsed =
         JSON.parse(value);
 
       updateConfig(parsed);
 
       setError("");
-
     } catch {
-
       setError(
         "Invalid JSON Configuration"
       );
@@ -300,11 +237,12 @@ export default function DashboardPage() {
   };
 
   const handleCSVImport = (
-    rows: Record<string, string>[]
+    rows: Record<
+      string,
+      string
+    >[]
   ) => {
-
-    if (rows.length === 0)
-      return;
+    if (rows.length === 0) return;
 
     const columns =
       Object.keys(rows[0]);
@@ -321,14 +259,15 @@ export default function DashboardPage() {
       data: rows,
     };
 
-    const updatedConfig: AppConfig = {
-      ...config,
+    const updatedConfig: AppConfig =
+      {
+        ...config,
 
-      components: [
-        ...config.components,
-        tableComponent,
-      ],
-    };
+        components: [
+          ...config.components,
+          tableComponent,
+        ],
+      };
 
     updateConfig(updatedConfig);
   };
@@ -336,16 +275,12 @@ export default function DashboardPage() {
   const handleLoadConfig = (
     loadedConfig: AppConfig
   ) => {
-
     updateConfig(loadedConfig);
-
-    setSelectedComponent(null);
   };
 
   const handleAddComponent = (
     type: string
   ) => {
-
     const newComponent: any = {
       id: crypto.randomUUID(),
 
@@ -370,22 +305,17 @@ export default function DashboardPage() {
     key: string,
     value: string
   ) => {
-
-    if (!selectedComponent)
-      return;
+    if (!selectedComponent) return;
 
     const updatedComponents =
       config.components.map(
         (component: any) => {
-
           if (
             component.id ===
             selectedComponent.id
           ) {
-
             return {
               ...component,
-
               [key]: value,
             };
           }
@@ -407,7 +337,6 @@ export default function DashboardPage() {
   const handleDeleteComponent = (
     id: string
   ) => {
-
     const updatedComponents =
       config.components.filter(
         (component: any) =>
@@ -428,7 +357,6 @@ export default function DashboardPage() {
     activeId: string,
     overId: string
   ) => {
-
     const oldIndex =
       config.components.findIndex(
         (component: any) =>
@@ -467,7 +395,10 @@ export default function DashboardPage() {
     updateConfig(updatedConfig);
   };
 
-  if (status === "loading") {
+  if (
+    status === "loading" ||
+    !configLoaded
+  ) {
     return <Loader />;
   }
 
@@ -475,23 +406,18 @@ export default function DashboardPage() {
     <main
       className={`min-h-screen transition ${currentTheme.background} ${currentTheme.text}`}
     >
-
       <div className="grid grid-cols-2 gap-6 p-6">
-
         <div
           className={`pr-6 overflow-auto h-screen border-r ${currentTheme.border}`}
         >
-
           <div className="mb-4 text-sm text-zinc-400">
-
-            Logged in as:
-            {" "}
-            {session?.user?.email}
-
+            Logged in as{" "}
+            {
+              session?.user?.email
+            }
           </div>
 
           <div className="flex flex-wrap gap-3 mb-4">
-
             <SaveConfigButton
               config={config}
             />
@@ -505,7 +431,6 @@ export default function DashboardPage() {
                 handleLoadConfig
               }
             />
-
           </div>
 
           <HistoryControls
@@ -559,7 +484,8 @@ export default function DashboardPage() {
               handleReorderComponents
             }
             selectedId={
-              selectedComponent?.id || ""
+              selectedComponent?.id ||
+              ""
             }
           />
 
@@ -591,19 +517,14 @@ export default function DashboardPage() {
               validationErrors
             }
           />
-
         </div>
 
         <div className="overflow-auto h-screen p-4">
-
           <DynamicDashboard
             config={filteredConfig}
           />
-
         </div>
-
       </div>
-
     </main>
   );
 }
