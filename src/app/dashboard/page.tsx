@@ -1,172 +1,480 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+useEffect,
+useMemo,
+useState,
+} from "react";
+
 import { useSession } from "next-auth/react";
 
-const templates = {
-  ecommerce: {
-    projectName: "Ecommerce App",
-    theme: "dark",
-    paymentGateway: "Stripe",
-    analytics: true,
-  },
+import { useRouter } from "next/navigation";
 
-  portfolio: {
-    projectName: "Portfolio Website",
-    theme: "light",
-    animations: true,
-    contactForm: true,
-  },
+import ConfigEditor from "@/components/editor/ConfigEditor";
 
-  saas: {
-    projectName: "SaaS Platform",
-    theme: "dark",
-    authentication: true,
-    subscriptions: true,
-  },
-};
+import DynamicDashboard from "@/components/DynamicDashboard";
+
+import ValidationPanel from "@/components/editor/ValidationPanel";
+
+import CSVImporter from "@/components/csv/CSVImporter";
+
+import SaveConfigButton from "@/components/actions/SaveConfigButton";
+
+import ExportConfigButton from "@/components/actions/ExportConfigButton";
+
+import ImportConfigButton from "@/components/actions/ImportConfigButton";
+
+import SavedConfigs from "@/components/actions/SavedConfigs";
+
+import HistoryControls from "@/components/actions/HistoryControls";
+
+import ComponentPalette from "@/components/builder/ComponentPalette";
+
+import BuilderCanvas from "@/components/builder/BuilderCanvas";
+
+import PropertyEditor from "@/components/builder/PropertyEditor";
+
+import ComponentSearch from "@/components/builder/ComponentSearch";
+
+import StatsPanel from "@/components/builder/StatsPanel";
+
+import TemplateSelector from "@/components/builder/TemplateSelector";
+
+import ThemeSelector from "@/components/theme/ThemeSelector";
+
+import Loader from "@/components/ui/Loader";
+
+import { sampleConfig } from "@/lib/configs/sampleConfig";
+
+import { templates } from "@/lib/configs/templates";
+
+import { validateConfig } from "@/lib/validator/validateConfig";
+
+import { themeClasses } from "@/lib/themes/themeClasses";
+
+import useHistory from "@/hooks/useHistory";
+
+import useAutoSave from "@/hooks/useAutoSave";
+
+import useKeyboardShortcuts from "@/hooks/useKeyboardShortcuts";
+
+import { AppConfig } from "@/types/config";
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
 
-  const [config, setConfig] = useState<Record<string, any>>({});
-  const [search, setSearch] = useState("");
+const {
+data: session,
+status,
+} = useSession();
 
-  const userEmail =
-    session?.user?.email || "guest";
+const router = useRouter();
 
-  const storageKey = "configflow-" + userEmail;
+useEffect(() => {
+if (
+  status === "unauthenticated"
+) {
 
-  const stringifyValue = (value: unknown) => {
-    if (value === null || value === undefined) return "";
-    if (typeof value === "object") return JSON.stringify(value);
-    return `${value}`;
-  };
+  router.push("/login");
+}
+}, [status, router]);
 
-  // LOAD USER DATA
-  useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
+const [
+initialConfig,
+] = useState<AppConfig>(() => {
+if (
+  typeof window !==
+  "undefined"
+) {
 
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setConfig(parsed && typeof parsed === "object" ? parsed : {});
-      } catch {
-        setConfig({});
-      }
-    } else {
-      setConfig({});
-    }
-  }, [storageKey]);
-
-  // AUTO SAVE
-  useEffect(() => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify(config)
+  const saved =
+    localStorage.getItem(
+      "configflow-autosave"
     );
-  }, [config, storageKey]);
 
-  // TEMPLATE SELECT
-  const handleTemplateSelect = (
-    template: keyof typeof templates
-  ) => {
-    setConfig(templates[template]);
+  if (saved) {
+
+    try {
+
+      return JSON.parse(saved);
+
+    } catch {
+
+      return sampleConfig;
+    }
+  }
+}
+
+return sampleConfig;
+});
+
+const history =
+useHistory<AppConfig>(
+initialConfig
+);
+
+const config =
+history.state;
+
+useAutoSave(
+"configflow-autosave",
+config
+);
+
+const [configText, setConfigText] =
+useState(
+JSON.stringify(
+config,
+null,
+2
+)
+);
+
+const [
+selectedComponent,
+setSelectedComponent,
+] = useState<any>(null);
+
+const [theme, setTheme] =
+useState("dark");
+
+const [search, setSearch] =
+useState("");
+
+const [error, setError] =
+useState("");
+
+const [
+validationErrors,
+setValidationErrors,
+] = useState<string[]>([]);
+
+const currentTheme =
+themeClasses[
+theme as keyof typeof themeClasses
+];
+
+const handleSaveShortcut =
+async () => {
+  try {
+
+    await fetch(
+      "/api/configs",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+
+        body: JSON.stringify({
+          name: "Runtime Config",
+
+          content: config,
+        }),
+      }
+    );
+
+  } catch {}
+};
+
+useKeyboardShortcuts({
+  onUndo: history.undo,
+  onRedo: history.redo,
+  onSave: handleSaveShortcut,
+});
+
+useEffect(() => {
+  setConfigText(
+    JSON.stringify(
+      config,
+      null,
+      2
+    )
+  );
+
+  const validation =
+    validateConfig(config);
+
+  setValidationErrors(
+    validation.errors
+  );
+}, [config]);
+
+const filteredConfig =
+useMemo(() => {
+  if (!search.trim()) {
+    return config;
+  }
+
+  return {
+    ...config,
+    components: config.components.filter((component: any) =>
+      component.type.toLowerCase().includes(search.toLowerCase())
+    ),
+  };
+}, [config, search]);
+
+const updateConfig = (updatedConfig: AppConfig) => {
+  history.set(updatedConfig);
+};
+
+const handleTemplateSelect = (templateName: string) => {
+  const template = templates[templateName as keyof typeof templates];
+  if (!template) return;
+
+  const updatedConfig = {
+    ...config,
+    components: [...config.components, ...template],
+  };
+  updateConfig(updatedConfig as AppConfig);
+};
+
+const handleConfigChange = (value: string) => {
+  setConfigText(value);
+  try {
+    const parsed = JSON.parse(value);
+    updateConfig(parsed);
+    setError("");
+  } catch {
+    setError("Invalid JSON Configuration");
+  }
+};
+
+const handleCSVImport = (
+  rows: Record<string, string>[]
+) => {
+  if (rows.length === 0) return;
+
+  const columns = Object.keys(rows[0]);
+
+  const tableComponent = {
+    id: crypto.randomUUID(),
+    type: "table" as const,
+    width: "full" as const,
+    columns,
+    data: rows,
   };
 
-  // SEARCH
-  const filteredEntries = Object.entries(config ?? {}).filter(
-    ([key]) =>
-      key.toLowerCase().includes(search.toLowerCase())
-  );
+  const updatedConfig: AppConfig = {
+    ...config,
+    components: [...config.components, tableComponent],
+  };
 
-  return (
-    <div className="min-h-screen bg-black text-white p-8">
-      <h1 className="text-4xl font-bold mb-2">
-        ConfigFlow Dashboard
-      </h1>
+  updateConfig(updatedConfig);
+};
 
-      <p className="text-zinc-400 mb-8">
-        Logged in as: {userEmail}
-      </p>
+const handleLoadConfig = (
+  loadedConfig: AppConfig
+) => {
+  updateConfig(loadedConfig);
+};
 
-      {/* TEMPLATE SECTION */}
-      <div className="mb-10">
-        <h2 className="text-2xl font-semibold mb-4">
-          Templates
-        </h2>
 
-        <div className="flex gap-4 flex-wrap">
-          <button
-            onClick={() =>
-              handleTemplateSelect("ecommerce")
-            }
-            className="bg-pink-600 hover:bg-pink-700 px-5 py-3 rounded-lg transition"
-          >
-            Ecommerce Template
-          </button>
+const handleAddComponent = (type: string) => {
+  const newComponent: any = {
+    id: crypto.randomUUID(),
+    type,
+    width: "full",
+  };
 
-          <button
-            onClick={() =>
-              handleTemplateSelect("portfolio")
-            }
-            className="bg-purple-600 hover:bg-purple-700 px-5 py-3 rounded-lg transition"
-          >
-            Portfolio Template
-          </button>
+  const updatedConfig = {
+    ...config,
+    components: [...config.components, newComponent],
+  };
 
-          <button
-            onClick={() =>
-              handleTemplateSelect("saas")
-            }
-            className="bg-blue-600 hover:bg-blue-700 px-5 py-3 rounded-lg transition"
-          >
-            SaaS Template
-          </button>
-        </div>
+  updateConfig(updatedConfig);
+};
+
+
+const handleUpdateProperty = (key: string, value: string) => {
+  if (!selectedComponent) return;
+
+  const updatedComponents = config.components.map((component: any) => {
+    if (component.id === selectedComponent.id) {
+      return {
+        ...component,
+        [key]: value,
+      };
+    }
+    return component;
+  });
+
+  const updatedConfig = {
+    ...config,
+    components: updatedComponents,
+  };
+
+  updateConfig(updatedConfig);
+};
+
+
+const handleDeleteComponent = (id: string) => {
+  const updatedComponents = config.components.filter((component: any) => component.id !== id);
+
+  const updatedConfig = {
+    ...config,
+    components: updatedComponents,
+  };
+
+  updateConfig(updatedConfig);
+};
+
+
+const handleReorderComponents = (activeId: string, overId: string) => {
+  const oldIndex = config.components.findIndex((component: any) => component.id === activeId);
+  const newIndex = config.components.findIndex((component: any) => component.id === overId);
+
+  const updatedComponents = [...config.components];
+
+  const [movedItem] = updatedComponents.splice(oldIndex, 1);
+  updatedComponents.splice(newIndex, 0, movedItem);
+
+  const updatedConfig = {
+    ...config,
+    components: updatedComponents,
+  };
+
+  updateConfig(updatedConfig);
+};
+
+
+if (status === "loading") {
+  return <Loader />;
+}
+
+return (
+<main
+className={`min-h-screen transition ${currentTheme.background} ${currentTheme.text}`}
+>
+  <div className="grid grid-cols-2 gap-6 p-6">
+
+    <div
+      className={`pr-6 overflow-auto h-screen border-r ${currentTheme.border}`}
+    >
+
+      <div className="mb-4 text-sm text-zinc-400">
+
+        Logged in as:
+        {" "}
+        {session?.user?.email}
+
       </div>
 
-      {/* SEARCH */}
-      <div className="mb-8">
-        <input
-          type="text"
-          placeholder="Search by component..."
-          value={search}
-          onChange={(e) =>
-            setSearch(e.target.value)
-          }
-          className="w-full p-3 rounded-lg text-black"
+      <div className="flex flex-wrap gap-3 mb-4">
+
+        <SaveConfigButton
+          config={config}
         />
+
+        <ExportConfigButton
+          config={config}
+        />
+
+        <ImportConfigButton
+          onImport={
+            handleLoadConfig
+          }
+        />
+
       </div>
 
-      {/* CONFIGURATION VIEW */}
-      <div className="grid gap-4">
-        {filteredEntries.length > 0 ? (
-          filteredEntries.map(([key, value]) => (
-            <div
-              key={key}
-              className="bg-zinc-900 p-5 rounded-xl border border-zinc-700"
-            >
-              <h3 className="text-xl font-semibold">
-                {key}
-              </h3>
+      <HistoryControls
+        onUndo={history.undo}
+        onRedo={history.redo}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
+      />
 
-              <p className="text-zinc-300 mt-2">
-                {stringifyValue(value)}
-              </p>
-            </div>
-          ))
-        ) : (
-          <div className="text-zinc-500">
-            No configurations found
-          </div>
-        )}
-      </div>
+      <ThemeSelector
+        theme={theme}
+        onChange={setTheme}
+      />
 
-      {/* AUTOSAVE */}
-      <div className="mt-10 text-green-400">
-        Auto-save enabled
-      </div>
+      <StatsPanel
+        config={config}
+      />
+
+      <TemplateSelector
+        onSelect={
+          handleTemplateSelect
+        }
+      />
+
+      <ComponentSearch
+        search={search}
+        onChange={setSearch}
+      />
+
+      <SavedConfigs
+        onSelect={
+          handleLoadConfig
+        }
+      />
+
+      <ComponentPalette
+        onAdd={
+          handleAddComponent
+        }
+      />
+
+      <BuilderCanvas
+        config={filteredConfig}
+        onSelect={
+          setSelectedComponent
+        }
+        onDelete={
+          handleDeleteComponent
+        }
+        onReorder={
+          handleReorderComponents
+        }
+        selectedId={
+          selectedComponent?.id || ""
+        }
+      />
+
+      <PropertyEditor
+        selectedComponent={
+          selectedComponent
+        }
+        onUpdate={
+          handleUpdateProperty
+        }
+      />
+
+      <CSVImporter
+        onImport={
+          handleCSVImport
+        }
+      />
+
+      <ConfigEditor
+        value={configText}
+        onChange={
+          handleConfigChange
+        }
+        error={error}
+      />
+
+      <ValidationPanel
+        errors={
+          validationErrors
+        }
+      />
+
     </div>
-  );
+
+    <div className="overflow-auto h-screen p-4">
+
+      <DynamicDashboard
+        config={filteredConfig}
+      />
+
+    </div>
+
+  </div>
+
+</main>
+);
 }
