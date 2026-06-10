@@ -1,0 +1,55 @@
+# ConfigFlow
+
+Metadata Driven Application Runtime built using Next.js, TypeScript, Prisma, PostgreSQL, and NextAuth.
+
+## Features
+
+* Dynamic UI Rendering
+* Metadata Driven Components
+* Drag and Drop Builder
+* JSON Config Editor
+* CSV Import
+* Theme Switching
+* Config Validation
+* Authentication
+* Protected Dashboard
+* Prisma + PostgreSQL Integration
+* Config Persistence
+* Auto Save
+* Undo / Redo
+* Keyboard Shortcuts
+
+## Tech Stack
+
+* Next.js 14
+* TypeScript
+* Tailwind CSS
+* Prisma ORM
+* PostgreSQL
+* NextAuth
+* Neon Database
+
+## Setup
+
+```bash
+npm install
+npm run dev
+```
+
+## Environment Variables
+
+Create `.env`:
+
+```env
+DATABASE_URL=
+NEXTAUTH_SECRET=
+NEXTAUTH_URL=http://localhost:3000
+```
+
+## Author
+
+Kalyani Fulpagare
+node_modules
+node_modules
+node_modules
+node_modules
