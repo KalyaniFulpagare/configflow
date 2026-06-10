@@ -30,7 +30,7 @@ import TemplateSelector from "@/components/builder/TemplateSelector";
 import ThemeSelector from "@/components/theme/ThemeSelector";
 import Loader from "@/components/ui/Loader";
 
-import { sampleConfig } from "@/lib/configs/sampleConfig";
+import { emptyConfig } from "@/lib/configs/emptyConfig";
 import { templates } from "@/lib/configs/templates";
 import { validateConfig } from "@/lib/validator/validateConfig";
 import { themeClasses } from "@/lib/themes/themeClasses";
@@ -42,7 +42,8 @@ import useKeyboardShortcuts from "@/hooks/useKeyboardShortcuts";
 import { AppConfig } from "@/types/config";
 
 export default function DashboardPage() {
-  const { data: session, status } = useSession();
+  const { data: session, status } =
+    useSession();
 
   const router = useRouter();
 
@@ -62,7 +63,7 @@ export default function DashboardPage() {
     useState(false);
 
   const [initialConfig, setInitialConfig] =
-    useState<AppConfig>(sampleConfig);
+    useState<AppConfig>(emptyConfig);
 
   useEffect(() => {
     if (!session?.user?.email) return;
@@ -74,10 +75,10 @@ export default function DashboardPage() {
       try {
         setInitialConfig(JSON.parse(saved));
       } catch {
-        setInitialConfig(sampleConfig);
+        setInitialConfig(emptyConfig);
       }
     } else {
-      setInitialConfig(sampleConfig);
+      setInitialConfig(emptyConfig);
     }
 
     setConfigLoaded(true);
@@ -208,7 +209,6 @@ export default function DashboardPage() {
       components: template.map(
         (component: any) => ({
           ...component,
-
           id: crypto.randomUUID(),
         })
       ),
