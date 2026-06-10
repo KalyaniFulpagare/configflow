@@ -1,20 +1,18 @@
+import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { AuthOptions } from "next-auth";
-import bcrypt from "bcrypt";
-
 import { prisma } from "./prisma";
+import bcrypt from "bcryptjs";
 
-export const authOptions: AuthOptions = {
+export const authOptions = {
   providers: [
     CredentialsProvider({
       name: "credentials",
-
       credentials: {
-        email: {},
-        password: {},
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
       },
 
-      async authorize(credentials) {
+      async authorize(credentials: any) {
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
@@ -29,12 +27,12 @@ export const authOptions: AuthOptions = {
           return null;
         }
 
-        const passwordMatch = await bcrypt.compare(
+        const isPasswordCorrect = await bcrypt.compare(
           credentials.password,
           user.password
         );
 
-        if (!passwordMatch) {
+        if (!isPasswordCorrect) {
           return null;
         }
 
@@ -47,12 +45,12 @@ export const authOptions: AuthOptions = {
   ],
 
   session: {
-    strategy: "jwt",
+    strategy: "jwt" as const,
   },
 
   secret: process.env.NEXTAUTH_SECRET,
-
-  pages: {
-    signIn: "/login",
-  },
 };
+
+const handler = NextAuth(authOptions);
+
+export { handler as GET, handler as POST };

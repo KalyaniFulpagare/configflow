@@ -1,27 +1,17 @@
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-
-    const { email, password } = body;
-
-    if (!email || !password) {
-      return Response.json(
-        { error: "Missing fields" },
-        { status: 400 }
-      );
-    }
+    const { email, password } = await req.json();
 
     const existingUser = await prisma.user.findUnique({
-      where: {
-        email,
-      },
+      where: { email },
     });
 
     if (existingUser) {
-      return Response.json(
+      return NextResponse.json(
         { error: "User already exists" },
         { status: 400 }
       );
@@ -36,10 +26,10 @@ export async function POST(req: Request) {
       },
     });
 
-    return Response.json(user);
-
+    return NextResponse.json(user);
   } catch (error) {
-    return Response.json(
+    console.log(error);
+    return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }
     );
